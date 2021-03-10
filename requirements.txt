@@ -4,3 +4,6 @@ redis
 requests
 randomcolor
 pillow
+matplotlib
+apnggif
+switchcase

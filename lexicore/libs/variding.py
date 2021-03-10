@@ -1,6 +1,6 @@
 import secrets, json, time
-from lexicore.lists import lists
-from lexicore.lists import metadata as metaTable
+from lexicore.libs.lists import lists
+from lexicore.libs.lists import metadata as metaTable
 
 def encoder(inputText, n = 0):
     """

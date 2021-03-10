@@ -1,24 +1,25 @@
 import requests
-import randomcolor
+import base64
+import json
+from datetime import datetime
+from PIL import Image
 import io
-from PIL import Image, ImageDraw, ImageColor
 
-r = requests.post(
-    "https://api.deepai.org/api/facial-recognition",
-    data={
-        'image': "https://api.deepai.org/job-view-file/53839298-27bb-4821-8a50-6a35caffa50e/inputs/image.jpg",
-    },
-    headers={'api-key': 'e1b08947-ff17-4c62-941b-bb5bb174aa81'}
+arg = 'v0rtetty'
+
+uuid = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{arg}")
+if uuid.status_code != 200:
+    uuid = arg
+else:
+    uuid = uuid.json()['id']
+
+names = "\n".join(
+    f" - {i['name']} ({'Changed to on ' + datetime.fromtimestamp(int(i['changedToAt'])/1000).strftime('%d-%m-%Y @ %H:%M:%S') if 'changedToAt' in i.keys() else 'Original'})" for i in requests.get(f"https://api.mojang.com/user/profiles/{uuid}/names").json()
 )
 
-im = Image.open(io.BytesIO(requests.get("https://api.deepai.org/job-view-file/53839298-27bb-4821-8a50-6a35caffa50e/inputs/image.jpg").content)).convert("RGBA")
-dr = ImageDraw.Draw(im)
-print(r.json())
-randc = randomcolor.RandomColor()
+profile = requests.get(
+    f"https://sessionserver.mojang.com/session/minecraft/profile/{uuid}").json()
+skin = json.loads(base64.b64decode(profile['properties'][0]['value']))
+name = profile['name']
 
-for i in r.json()["output"]["faces"]:
-    dr.rectangle([i["bounding_box"][0], i["bounding_box"][1], i["bounding_box"][0]+i["bounding_box"][2], i["bounding_box"][1]+i["bounding_box"][3]], outline=randc.generate(format_="rgb")[0], width=2)
-
-output = io.BytesIO()
-im.save(output, format="PNG")
-output.seek(0)
+print(skin)

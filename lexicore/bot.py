@@ -1,5 +1,5 @@
 from importlib import reload  
-import lexicore.configReader as configReader
+import lexicore.config.configReader as configReader
 import discord
 from discord.ext import commands, tasks
 import redis
@@ -7,11 +7,11 @@ import os
 import datetime
 import time
 import random
-import lexicore.variding as variding
+import lexicore.libs.variding as variding
 import secrets
-import lexicore.numerals as numerals
+import lexicore.libs.numerals as numerals
 import asyncio
-import lexicore.compress as compressionAlgo
+import lexicore.libs.compress as compressionAlgo
 import math
 import requests
 from io import StringIO   
@@ -24,17 +24,27 @@ from urllib.request import urlopen
 from lexicore.sorting import bubble as bubbleSort
 from lexicore.sorting import cocktail as cocktailSort
 from lexicore.sorting import bogo as bogoSort
+from lexicore.sorting import gnome as gnomeSort
+from lexicore.sorting import counting as countingSort
+from lexicore.sorting import swap as swapSort
+from apnggif import apnggif
+from switchcase import switch
+from decimal import Decimal, getcontext
+import base64
+import json
+from lexicore.libs import mcHelper
+import textwrap
 
 #this just makes no errors happen
-lexiRole, lexiId, token, prefixes = (None, None, None, [])
+lexiRole, lexiId, prefixes = (None, None, [])
 
 #this updates globals with anything in the config
 globals().update(configReader.loadConfig())
 
-try: 
-    db = redis.from_url(os.environ.get("REDIS_URL"), decode_responses=True)
-except:
-    db = redis.from_url("redis://:p14a587f3bc40c7f85a691224d118543cef4c58d742d6d04f4d7be6290053880a@ec2-34-238-101-201.compute-1.amazonaws.com:19209", decode_responses=True)
+#set token
+token = os.environ.get("TOKEN")
+
+db = redis.from_url(os.environ.get("REDIS_URL"), decode_responses=True)
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix=prefixes[0], intents=intents)
@@ -68,7 +78,7 @@ def getUserNameAuthor(author):
 #
 def isWinter():
     async def predicate(ctx):
-        return ctx.author.id == 681531347583631444
+        return ctx.author.id == lexiId
     return commands.check(predicate)
 
 @bot.event
@@ -101,6 +111,106 @@ async def addrole(ctx, *, arg):
             await ctx.author.add_roles(discord.utils.get(ctx.guild.roles, id=int(arg)), reason="I was told to")
 
 @bot.command()
+async def nameai(ctx, *, arg):
+    async with ctx.typing():
+        age = requests.get(f"https://api.agify.io/?name={arg}").json()
+        gender = requests.get(f"https://api.genderize.io/?name={arg}").json()
+        nations = requests.get(f"https://api.nationalize.io/?name={arg}").json()
+        
+        e = discord.Embed(colour=getUserColor(ctx))
+        e.title = f"Ai guesses for name {arg}"
+        e.description = (
+f"""`Age:` {age['age']}
+`Guessed Gender:` {gender['gender']} (Sureness: {gender['probability']*100}%)
+`Nations:` 
+{chr(10).join(' - ' + i["country_id"] + '(Sureness: ' + str(i['probability']*100) + '%)' for i in nations["country"])}"""
+        )
+        await ctx.send(embed=e)
+
+@bot.command()
+async def xkcd(ctx, *args):
+    async with ctx.typing():
+        newest = requests.get(f"https://xkcd.com/info.0.json").json()['num']
+        if len(args) < 1:
+            comic = requests.get(f"https://xkcd.com/info.0.json").json()
+            e = discord.Embed(colour=getUserColor(ctx))
+            e.title = f"{comic['title']}"
+            e.add_field(name="Number", value=f"[#{newest}](https://xkcd.com/{newest})", inline=True)
+            e.add_field(name="Date", value=f"{str(comic['day']).zfill(2)}-{str(comic['month']).zfill(2)}-{str(comic['year']).zfill(2)}", inline=True)
+            e.add_field(name="Safe Title", value=f"{comic['safe_title']}", inline=True)
+            e.add_field(name="News", value=comic['news'] if comic['news'] else "N/A", inline=False)
+            cnt = 0
+            for i in textwrap.wrap(comic['transcript'].replace('\n', '\\n') if comic['transcript'] else "N/A", 1024, break_long_words=False):
+                e.add_field(name="Transcript" if cnt<1 else "\u200b", value=i.replace('\\n', '\n'), inline=False)
+                cnt += 1
+            e.add_field(name="Alternate Text", value=comic['alt'] if comic['alt'] else "N/A", inline=False)
+            e.set_image(url=comic['img'])
+            await ctx.send(embed=e)
+        elif int(args[0]) <= newest:
+            comic = requests.get(f"https://xkcd.com/{args[0]}/info.0.json").json()
+            e = discord.Embed(colour=getUserColor(ctx))
+            e.title = f"{comic['title']}"
+            e.add_field(name="Number", value=f"[#{args[0]}](https://xkcd.com/{args[0]})", inline=True)
+            e.add_field(name="Date", value=f"{str(comic['day']).zfill(2)}-{str(comic['month']).zfill(2)}-{str(comic['year']).zfill(2)}", inline=True)
+            e.add_field(name="Safe Title", value=f"{comic['safe_title']}", inline=True)
+            e.add_field(name="News", value=comic['news'] if comic['news'] else "N/A", inline=False)
+            cnt = 0
+            for i in textwrap.wrap(comic['transcript'].replace('\n', '\\n') if comic['transcript'] else "N/A", 1024, break_long_words=False):
+                e.add_field(name="Transcript" if cnt<1 else "\u200b", value=i.replace('\\n', '\n'), inline=False)
+                cnt += 1
+            e.add_field(name="Alternate Text", value=comic['alt'] if comic['alt'] else "N/A", inline=False)
+            e.set_image(url=comic['img'])
+            await ctx.send(embed=e)
+
+@bot.command()
+async def mc(ctx, *, arg):
+    async with ctx.typing():
+        uuid = requests.get(f"https://api.mojang.com/users/profiles/minecraft/{arg}")
+        if uuid.status_code != 200:
+            uuid = arg
+        else:
+            uuid = uuid.json()['id']
+
+        names = "\n".join(
+            f" - {i['name']} ({'Changed to on ' + datetime.datetime.fromtimestamp(int(i['changedToAt'])/1000).strftime('%d-%m-%Y @ %H:%M:%S') if 'changedToAt' in i.keys() else 'Original'})" for i in requests.get(f"https://api.mojang.com/user/profiles/{uuid}/names").json()
+        )
+
+        profile = requests.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{uuid}").json()
+        skin = json.loads(base64.b64decode(profile['properties'][0]['value']))
+        name = profile['name']
+
+        e = discord.Embed(colour=getUserColor(ctx))
+        e.title = f"Mc player info"
+        e.description = f"`Name:` {name}\n`UUID:` {uuid}\n`Previous names:`\n{names}"
+        await ctx.send(embed=e)
+
+        sim = Image.open(io.BytesIO(requests.get(skin['textures']['SKIN']['url']).content))
+        slim = False
+
+        try: slim = skin['textures']['SKIN']['metadata']['slim']
+        except: pass
+        
+        im = Image.new("RGBA", (48, 32*3+2))
+        
+        right = mcHelper.right(sim, slim)
+        front = mcHelper.front(sim, slim)
+        left = mcHelper.left(sim, slim)
+        back = mcHelper.back(sim, slim)
+
+        im.paste(right, (0, 0), mask=right)
+        im.paste(front, (8, 0), mask=front)
+        im.paste(left, (24, 0), mask=left)
+        im.paste(back, (32, 0), mask=back)
+
+        im.resize((48*8, (32*3+2)*8), resample=Image.NEAREST).save("player.png")
+
+        e.title = f"Mc player skin"
+        e.description = ""
+        files = [discord.File("player.png")]
+        await ctx.send(embed=e, files=files)
+        
+
+@bot.command()
 async def userinfo(ctx, *args):
     userId = int(args[0].replace("<", "").replace("@", "").replace(">", "").replace("!", ""))
     user = ctx.guild.get_member(userId)
@@ -127,41 +237,119 @@ async def userinfo(ctx, *args):
     e.set_thumbnail(url=user.avatar_url)
     message = await ctx.send(embed=e)
 
+@bot.command()
+async def approximate(ctx, *args):
+    async with ctx.typing():
+        for case in switch(args[0].lower()):
+            getcontext().prec=1000
+            iters = min(max(int(args[1]), 1), 1000)
+            if case("pi"):
+                totalPi = sum(1/Decimal(16)**k * (Decimal(4)/(8*k+1) - 
+                        Decimal(2)/(8*k+4) - 
+                        Decimal(1)/(8*k+5) -
+                        Decimal(1)/(8*k+6)) for k in range(iters))
+
+                e = discord.Embed(colour=getUserColor(ctx))
+                e.title = f"Pi with {iters} iterations to 1000 digits"
+                e.description = "`" + str(totalPi) + "`"
+                e.set_footer(text="")
+                await ctx.send(embed=e)
+                break
+            if case("e"):
+                totalE = sum(Decimal(1) / Decimal(math.factorial(i)) for i in range(iters))
+
+                e = discord.Embed(colour=getUserColor(ctx))
+                e.title = f"E with {iters} iterations to 1000 digits"
+                e.description = "`" + str(totalE) + "`"
+                e.set_footer(text="")
+                await ctx.send(embed=e)
+                break
+
+@bot.command()
+@isWinter()
+async def addchannel(ctx, *args):
+    guild = ctx.guild
+    category = discord.utils.get(guild.categories, id=int(args[0]))
+    position = int(args[1])
+    nsfw = args[2].lower() in ['true', '1', 't', 'y', 'yes']
+    name = args[3].replace(" ", "-")
+    desc = " ".join(args[4:])
+
+    await guild.create_text_channel(name=name, category=category, position=position, topic=desc, nsfw=nsfw)
 
 @bot.command()
 async def bubble(ctx, *args):
-    sort = bubbleSort.sort(int(args[0]))
-
     async with ctx.typing():
-        image = Image.new("P", sort.widHig)
-        image.save("bubble.gif", 'GIF', save_all=True, append_images=sort.images)
+        sort = bubbleSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+
+        image = Image.new("RGB", sort.widHig)
+        image.save("bubble.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 32), 2)])
+        apnggif("bubble.png")
         await ctx.send(file=discord.File(fp="bubble.gif"))
 
 @bot.command()
-async def cocktail(ctx, *args):
-    sort = cocktailSort.sort(int(args[0]))
-
+async def swap(ctx, *args):
     async with ctx.typing():
-        image = Image.new("P", sort.widHig)
-        image.save("cocktail.gif", 'GIF', save_all=True, append_images=sort.images)
+        sort = swapSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+
+        image = Image.new("RGB", sort.widHig)
+        image.save("swap.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 32), 2)])
+        apnggif("swap.png")
+        await ctx.send(file=discord.File(fp="swap.gif"))
+
+@bot.command()
+async def cocktail(ctx, *args):
+    async with ctx.typing():
+        sort = cocktailSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+
+        image = Image.new("RGB", sort.widHig)
+        image.save("cocktail.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 32), 2)])
+        apnggif("cocktail.png")
         await ctx.send(file=discord.File(fp="cocktail.gif"))
 
 @bot.command()
 async def bogo(ctx, *args):
-    sort = bogoSort.sort(int(args[0]))
-    
     async with ctx.typing():
-        image = Image.new("P", sort.widHig)
-        image.save("bogo.gif", 'GIF', save_all=True, append_images=sort.images)
+        sort = bogoSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+    
+        image = Image.new("RGB", sort.widHig)
+        image.save("bogo.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 4), 2)])
+        apnggif("bogo.png")
         await ctx.send(file=discord.File(fp="bogo.gif"))
 
-def getAiImg(text, images):
+@bot.command()
+async def gnome(ctx, *args):
+    async with ctx.typing():
+        sort = gnomeSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+    
+        image = Image.new("RGB", sort.widHig)
+        image.save("gnome.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 32), 2)])
+        apnggif("gnome.png")
+        await ctx.send(file=discord.File(fp="gnome.gif"))
+
+@bot.command()
+async def counting(ctx, *args):
+    async with ctx.typing():
+        sort = countingSort.sort(int(args[0]))
+        (sort.renderFrame() for i in range(10))
+    
+        image = Image.new("RGB", sort.widHig)
+        image.save("counting.png", "PNG", save_all=True, append_images=sort.images, default_image=sort.images[max(min(int(args[0]), 24), 2)])
+        apnggif("counting.png")
+        await ctx.send(file=discord.File(fp="counting.gif"))
+
+"""def getAiImg(text, images):
     r = requests.post(
             "https://api.deepai.org/api/text2img",
             data={
                 'text': text,
             },
-            headers={'api-key': 'e1b08947-ff17-4c62-941b-bb5bb174aa81'}
+            headers={'api-key': '<deleted for safety>'}
         )
     images.append(discord.File(io.BytesIO(requests.get(r.json()["output_url"]).content), filename=f"aiImage{images.__len__()}.jpg"))
 
@@ -213,7 +401,7 @@ async def capt(ctx):
         data={
             'image': attachment.url,
         },
-        headers={'api-key': 'e1b08947-ff17-4c62-941b-bb5bb174aa81'}
+        headers={'api-key': '<deleted for safety>'}
     )
     e = discord.Embed(colour=getUserColor(ctx))
     e.title = r.json()["output"]
@@ -231,7 +419,7 @@ async def faces(ctx):
         data={
             'image': attachment.url,
         },
-        headers={'api-key': 'e1b08947-ff17-4c62-941b-bb5bb174aa81'}
+        headers={'api-key': '<deleted for safety>'}
     )
 
     fd = urlopen(attachment.url)
@@ -253,7 +441,7 @@ async def faces(ctx):
     e.title = f"Located {len(r.json()['output']['faces'])} faces"
     e.description = f"Faces found by an ai! Requested by {getUserNameAuthor(ctx.author)}"
     e.set_footer(text="Credits for ai go to [UNKNOWN] at https://deepai.org/machine-learning-model/facial-recognition")
-    await ctx.send(embed=e, file=f)
+    await ctx.send(embed=e, file=f)"""
 
 @bot.command()
 async def sendanon(ctx, *, arg):
@@ -540,13 +728,17 @@ async def help(ctx, *args):
     helpmessage = helpmessage + " - ``sendext <server id> <channel name/id> <message>`` Sends a message in another channel from another server (if the bot is in it)\n"
     helpmessage = helpmessage + " - ``sendanon <server id> <channel name/id> <message>`` Sends a message in another channel from another server (if the bot is in it) as noone, admin only\n"
     helpmessage = helpmessage + " - ``rename <user id> <name>`` Rename user by id, admin only\n"
-    helpmessage = helpmessage + " - ``aimg <count> <image description>`` Gets an ai generated image given a description\n"
-    helpmessage = helpmessage + " - ~~``faces <image file>`` Puts a box around all faces in an image recognized by an ai~~ broken\n"
-    helpmessage = helpmessage + " - ``capt <image file>`` Gets an ai descriprion given an image \n"
+    helpmessage = helpmessage + " - ``mc <name/uuid>`` Gets mc player's info\n"
+    helpmessage = helpmessage + " - ``nameai <name>`` Ai guess about name\n"
+    helpmessage = helpmessage + " - ``xkcd <number>`` If number is not provided, gets the newest\n"
     helpmessage = helpmessage + " - ``bogo <bars>`` Bogo sorts a randomized array, valid bars counts are 2-4 \n"
-    helpmessage = helpmessage + " - ``bubble <bars>`` Bubble sorts a randomized array, valid bars counts are 2-16 \n"
-    helpmessage = helpmessage + " - ``cocktail <bars>`` Cocktail sorts a randomized array, valid bars counts are 2-16 \n"
+    helpmessage = helpmessage + " - ``bubble <bars>`` Bubble sorts a randomized array, valid bars counts are 2-32 \n"
+    helpmessage = helpmessage + " - ``cocktail <bars>`` Cocktail sorts a randomized array, valid bars counts are 2-32 \n"
+    helpmessage = helpmessage + " - ``gnome <bars>`` Gnome sorts a randomized array, valid bars counts are 2-32 \n"
+    helpmessage = helpmessage + " - ``swap <bars>`` Swap sorts a randomized array (idk the actual name, just iterates and moves the bar to the proper position), valid bars counts are 2-32 \n"
+    helpmessage = helpmessage + " - ``counting <bars>`` Counting sorts a randomized array, valid bars counts are 2-24 \n"
     helpmessage = helpmessage + " - ``userinfo <ping/id>`` Returns info about the user \n"
+    helpmessage = helpmessage + " - ``approximate <PI/E> <iterations>`` Will approximate PI or E with specified iterations (valid range is 1-1000) to 1000 digits. \n"
     helpmessage = helpmessage + " - ``ping`` Shows bot latency\n"
     helpmessage = helpmessage + " - ``help`` Shows this menu\n"
     helpmessage = helpmessage + "React to any message sent by the bot with ❌ to delete it\n"
@@ -599,4 +791,3 @@ async def on_message(message):
 async def on_raw_message_edit(payload):
     message = await bot.get_channel(payload.channel_id).fetch_message(payload.message_id)
     await on_message(message)
-

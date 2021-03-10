@@ -1,7 +1,7 @@
 from lexicore.sorting.sortable import sortable
 
 def sort(length: int) -> sortable:
-    sort = sortable(max(min(length, 16), 2), visual=True, gif=True)
+    sort = sortable(max(min(length, 32), 2), visual=True, gif=True)
     sort.shuffle()
 
     while not sort.checkSorted():

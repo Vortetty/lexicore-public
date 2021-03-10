@@ -1,14 +1,17 @@
 {
-  "name": "Bots",
+  "name": "bots",
   "description": "Runs discord bots",
   "image": "heroku/python",
   "repository": "https://github.com/Vortetty/Aravae",
   "keywords": ["python", "discord"],
   "environments": {
-    "test": {
-      "scripts": {
-        "test": "bot.py"
-      }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/python"
+    },
+    {
+      "url": "heroku/nodejs"
     }
-  }
+  ]
 }
