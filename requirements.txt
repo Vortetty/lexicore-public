@@ -1,0 +1,6 @@
+discord.py
+simplejson
+redis
+requests
+randomcolor
+pillow
