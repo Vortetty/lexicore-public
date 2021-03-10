@@ -29,6 +29,6 @@ async def run(cmd):
 loop = asyncio.get_event_loop()
 #loop.create_task(aravae.bot.start(aravae.token))
 #loop.create_task(run("cd floppobot && node index.js"))
-loop.create_task(floppobot.bot.start("ODE1MjQ0NzUyNjcxNzM1ODA5.YDpl1w.Q5AzZudrF-vcZf2z9IaSnUmjRos"))
+loop.create_task(floppobot.bot.start("<redacted>"))
 loop.create_task(lexicore.bot.start(lexicore.token))
 loop.run_forever()
